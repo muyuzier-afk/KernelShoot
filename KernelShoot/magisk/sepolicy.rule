@@ -1,66 +1,46 @@
 # KernelShoot - sepolicy.rule
-# 同时兼容 Magisk 与 KernelSU (后者 service.sh 跑在 u:r:su:s0)
+# 仅 KernelSU: service.sh 跑在 u:r:su:s0 域
 #
-# KernelSU 说明:
-#   - KSU 在 SELinux Enforcing 全局模式下完全可用, 不需要把系统设为 Permissive
-#   - KSU 内核模块启动时通过 apply_kernelsu_rules() 把 u:r:su:s0 域设为 permissive
-#     并注入 ksu_allow(su, ALL, ALL, ALL), 因此守护进程访问 fb0/dri/sdcard 理论上
-#     不会被拒; 但显式 allow 仍是推荐做法:
-#       a) 避免 dmesg 刷 avc: denied 噪音
-#       b) 兼容 KernelSU-Next / sus_su 等不默认 permissive 的分支
-#       c) 兼容 Magisk (其 magisk 域是 enforcing, 这些规则是必需的)
+# KSU 启动时 apply_kernelsu_rules() 把 su 域设为 permissive 并注入
+# ksu_allow(su, ALL, ALL, ALL), 因此守护进程访问 fb0/dri/sdcard 理论上
+# 不会被拒; 但显式 allow 仍是推荐做法:
+#   a) 避免 dmesg 刷 avc: denied 噪音
+#   b) 兼容 KernelSU-Next / sus_su 等不默认 permissive 的分支
 #
-# 关键不可省略: App (untrusted_app, enforcing) 连接守护进程 (su/magisk 域) 的
+# 关键不可省略: App (untrusted_app, enforcing) 连接守护进程 (su 域) 的
 # 抽象命名空间 socket 必须显式放行 connectto, 否则 Java 端 connect() 返回 EACCES.
 # 这条规则与守护进程所在域是否 permissive 无关 (被拦的是 App 一侧).
 
 # ---------- 1. 守护进程访问 framebuffer /dev/graphics/fb0 ----------
-allow magisk graphics_device:chr_file { read write open map getattr ioctl };
-allow su      graphics_device:chr_file { read write open map getattr ioctl };
+allow su graphics_device:chr_file { read write open map getattr ioctl };
 
 # ---------- 2. DRM /dev/dri/card0 ----------
-allow magisk gpu_device:chr_file { read write open map getattr ioctl };
-allow magisk drm_device:chr_file { read write open map getattr ioctl };
-allow su      gpu_device:chr_file { read write open map getattr ioctl };
-allow su      drm_device:chr_file { read write open map getattr ioctl };
+allow su gpu_device:chr_file { read write open map getattr ioctl };
+allow su drm_device:chr_file { read write open map getattr ioctl };
 
 # ---------- 3. 守护进程自身的 abstract socket (server 端) ----------
-allow magisk self:unix_stream_socket { create bind listen accept read write setopt };
-allow su      self:unix_stream_socket { create bind listen accept read write setopt };
+allow su self:unix_stream_socket { create bind listen accept read write setopt };
 
 # ---------- 4. 写入 /sdcard/DCIM ----------
-allow magisk media_rw_data_file:dir  { search write add_name remove_name };
-allow magisk media_rw_data_file:file { create write open read getattr unlink setattr };
-allow su      media_rw_data_file:dir  { search write add_name remove_name };
-allow su      media_rw_data_file:file { create write open read getattr unlink setattr };
-
+allow su media_rw_data_file:dir  { search write add_name remove_name };
+allow su media_rw_data_file:file { create write open read getattr unlink setattr };
 # 兼容部分设备 DCIM 走 storage_file 上下文
-allow magisk storage_file:dir  { search write add_name remove_name };
-allow magisk storage_file:file { create write open read getattr unlink setattr };
-allow su      storage_file:dir  { search write add_name remove_name };
-allow su      storage_file:file { create write open read getattr unlink setattr };
+allow su storage_file:dir  { search write add_name remove_name };
+allow su storage_file:file { create write open read getattr unlink setattr };
 
 # ---------- 5. 读取 /proc/[pid] (前台包名检测) ----------
-allow magisk proc:dir  { search read open };
-allow magisk proc:file { read open getattr };
-allow su      proc:dir  { search read open };
-allow su      proc:file { read open getattr };
+allow su proc:dir  { search read open };
+allow su proc:file { read open getattr };
 
 # ---------- 6. ★ App 连守护进程 socket (跨域, 必需) ----------
 # App 在 untrusted_app 域 (enforcing), 必须显式允许 connectto
-# 同时覆盖各 Android 版本变体
-allow untrusted_app    magisk unix_stream_socket connectto;
-allow untrusted_app    su     unix_stream_socket connectto;
-allow untrusted_app_25 magisk unix_stream_socket connectto;
-allow untrusted_app_25 su     unix_stream_socket connectto;
-allow untrusted_app_27 magisk unix_stream_socket connectto;
-allow untrusted_app_27 su     unix_stream_socket connectto;
-allow untrusted_app_29 magisk unix_stream_socket connectto;
-allow untrusted_app_29 su     unix_stream_socket connectto;
-allow untrusted_app_30 magisk unix_stream_socket connectto;
-allow untrusted_app_30 su     unix_stream_socket connectto;
-allow untrusted_app_32 magisk unix_stream_socket connectto;
-allow untrusted_app_32 su     unix_stream_socket connectto;
+# 覆盖各 Android 版本变体
+allow untrusted_app    su unix_stream_socket connectto;
+allow untrusted_app_25 su unix_stream_socket connectto;
+allow untrusted_app_27 su unix_stream_socket connectto;
+allow untrusted_app_29 su unix_stream_socket connectto;
+allow untrusted_app_30 su unix_stream_socket connectto;
+allow untrusted_app_32 su unix_stream_socket connectto;
 
 # ---------- 7. (可选) 调试用: 把跨域连接也记入 audit 方便排查 ----------
 # auditallow untrusted_app su unix_stream_socket connectto;
