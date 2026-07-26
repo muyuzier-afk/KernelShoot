@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">KernelShoot</string>
+
+    <!-- 通知渠道 -->
+    <string name="channel_name">KernelShoot 服务</string>
+    <string name="channel_desc">截图触发持久通知 (低打扰)</string>
+
+    <!-- 持久通知 -->
+    <string name="notif_title">KernelShoot 运行中</string>
+    <string name="notif_text">点击截图 · 3 秒倒计时</string>
+
+    <!-- Toast -->
+    <string name="toast_countdown">%1$d 秒后截图…</string>
+    <string name="toast_success">截图成功: %1$s</string>
+    <string name="toast_failed">截图失败 [%1$d]: %2$s</string>
+
+    <!-- 主界面 -->
+    <string name="main_status">KernelShoot 已启动。\n\n点击通知栏的「KernelShoot 运行中」即可在 3 秒后静默截图。\n\n截图保存于 /sdcard/DCIM/。\n本界面可关闭, 服务持续后台运行。</string>
+</resources>
