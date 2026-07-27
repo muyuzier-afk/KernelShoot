@@ -1,0 +1,154 @@
+#!/usr/bin/env bash
+# KernelShoot - ci_build.sh
+# GitHub Actions 专用构建脚本
+# 在 ubuntu runner 上完成: 静态库 -> 守护进程 -> APK -> 模块 zip
+#
+# 与 build.sh 区别: 不依赖宿主预装 NDK/SDK, 全部由 workflow 注入环境变量
+# 输出统一放在 dist/, 供后续 release 上传
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+cd "$ROOT"
+
+NDK="${ANDROID_NDK:?ANDROID_NDK not set}"
+# 兼容 ANDROID_HOME / ANDROID_SDK_ROOT 两种变量名
+SDK="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+[ -n "$SDK" ] || { echo "ANDROID_HOME or ANDROID_SDK_ROOT not set" >&2; exit 1; }
+export ANDROID_HOME="$SDK" ANDROID_SDK_ROOT="$SDK"
+ABI=arm64-v8a
+API=28
+
+log()  { echo -e "\033[1;34m[ci]\033[0m $*"; }
+fail() { echo -e "\033[1;31m[ci-error]\033[0m $*" >&2; exit 1; }
+
+# ---------- 0. 工具链准备 ----------
+TOOLCHAIN="$NDK/toolchains/llvm/linux-x86_64"
+export PATH="$TOOLCHAIN/bin:$PATH"
+CC="$TOOLCHAIN/bin/aarch64-linux-android$API-clang"
+AR="$TOOLCHAIN/bin/llvm-ar"
+[ -x "$CC" ] || fail "clang not found: $CC"
+
+PREBUILT="$ROOT/native/prebuilt/$ABI"
+WORK="$ROOT/build/_ci"
+DIST="$ROOT/dist"
+mkdir -p "$PREBUILT/include/libdrm" "$PREBUILT/include/drm" "$WORK" "$DIST"
+
+# ---------- 1. libjpeg-turbo 静态库 ----------
+build_libjpeg() {
+    log "building libjpeg-turbo"
+    local SRC="$WORK/libjpeg-turbo-3.0.0"
+    if [ ! -d "$SRC" ]; then
+        curl -fsSL "https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.0.0/libjpeg-turbo-3.0.0.tar.gz" \
+            | tar -xz -C "$WORK"
+    fi
+    cmake -S "$SRC" -B "$WORK/libjpeg" \
+        -DCMAKE_SYSTEM_NAME=Android \
+        -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+        -DCMAKE_ANDROID_NDK="$NDK" \
+        -DCMAKE_ANDROID_ARCH=arm64 \
+        -DCMAKE_ANDROID_API="$API" \
+        -DCMAKE_C_COMPILER="$CC" \
+        -DCMAKE_AR="$AR" \
+        -DENABLE_SHARED=OFF -DENABLE_STATIC=ON \
+        -DWITH_TURBOJPEG=ON \
+        -DCMAKE_INSTALL_PREFIX="$PREBUILT"
+    cmake --build "$WORK/libjpeg" -j"$(nproc)"
+    cmake --install "$WORK/libjpeg"
+    cp -f "$PREBUILT/lib/libturbojpeg.a" "$PREBUILT/" 2>/dev/null || true
+}
+
+# ---------- 2. libdrm 静态库 ----------
+build_libdrm() {
+    log "building libdrm"
+    local SRC="$WORK/libdrm-2.4.115"
+    if [ ! -d "$SRC" ]; then
+        curl -fsSL "https://dri.freedesktop.org/libdrm/libdrm-2.4.115.tar.xz" \
+            | tar -xJ -C "$WORK"
+    fi
+    cat > "$WORK/libdrm-cross.txt" <<EOF
+[binaries]
+c = '$CC'
+ar = '$AR'
+[host_machine]
+system = 'android'
+cpu_family = 'aarch64'
+cpu = 'aarch64'
+endian = 'little'
+EOF
+    meson setup "$SRC" "$WORK/libdrm" \
+        --cross-file "$WORK/libdrm-cross.txt" \
+        --default-library=static \
+        --prefix="$PREBUILT" \
+        -Dintel=disabled -Dradeon=disabled -Damdgpu=disabled \
+        -Dnouveau=disabled -Dvmwgfx=disabled -Domap=disabled \
+        -Dexynos=disabled -Dfreedreno=disabled -Dtegra=disabled \
+        -Dvc4=disabled -Detnaviv=disabled -Dsysmans=disabled
+    ninja -C "$WORK/libdrm" install
+    cp -f "$PREBUILT/lib/libdrm.a" "$PREBUILT/" 2>/dev/null || true
+    cp -f "$PREBUILT"/include/xf86drm*.h "$PREBUILT/include/" 2>/dev/null || true
+    cp -f "$PREBUILT"/include/libdrm/*.h "$PREBUILT/include/libdrm/" 2>/dev/null || true
+    cp -f "$PREBUILT"/include/drm/*.h "$PREBUILT/include/drm/" 2>/dev/null || true
+}
+
+# ---------- 3. 守护进程 ----------
+build_daemon() {
+    log "building KernelShoot_daemon"
+    make -C "$ROOT/native" clean >/dev/null 2>&1 || true
+    ANDROID_NDK="$NDK" make -C "$ROOT/native" all
+    ANDROID_NDK="$NDK" make -C "$ROOT/native" strip
+    local BIN="$ROOT/native/build/$ABI/KernelShoot_daemon"
+    [ -f "$BIN" ] || fail "daemon build failed"
+    file "$BIN"
+}
+
+# ---------- 4. APK ----------
+build_apk() {
+    log "building APK"
+    cd "$ROOT"
+    # gradle wrapper 不在仓库里, 用系统 gradle 兜底
+    if [ -x "./gradlew" ]; then
+        chmod +x ./gradlew
+        ./gradlew :app:assembleRelease --no-daemon -x lint
+    else
+        gradle :app:assembleRelease --no-daemon -x lint
+    fi
+    local APK="$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk"
+    [ -f "$APK" ] || fail "apk build failed"
+    cp -f "$APK" "$WORK/KernelShoot.apk"
+}
+
+# ---------- 5. 组装模块 zip ----------
+build_module() {
+    log "assembling module zip"
+    local VER; VER="$(tr -d '[:space:]' < "$ROOT/VER")"
+    [ -n "$VER" ] || fail "VER file empty"
+    local STAGE; STAGE="$(mktemp -d)"
+    trap 'rm -rf "$STAGE"' EXIT
+
+    cp -r "$ROOT/magisk/." "$STAGE/"
+    # 同步 VER 到 module.prop version
+    sed -i "s/^version=.*/version=v$VER/" "$STAGE/module.prop"
+
+    cp -f "$ROOT/native/build/$ABI/KernelShoot_daemon" "$STAGE/KernelShoot_daemon"
+    chmod 0755 "$STAGE/KernelShoot_daemon"
+
+    if [ -f "$WORK/KernelShoot.apk" ]; then
+        cp -f "$WORK/KernelShoot.apk" "$STAGE/KernelShoot.apk"
+    fi
+    rm -rf "$STAGE/system" 2>/dev/null || true
+
+    local ZIP="$DIST/KernelShoot-v$VER.zip"
+    ( cd "$STAGE" && zip -r9 "$ZIP" ./* >/dev/null )
+    log "module zip: $ZIP"
+    ls -la "$ZIP"
+}
+
+# ---------- main ----------
+build_libjpeg
+build_libdrm
+build_daemon
+build_apk
+build_module
+
+log "done. dist:"
+ls -la "$DIST"

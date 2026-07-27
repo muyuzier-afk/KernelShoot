@@ -1,0 +1,146 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'native/**'
+      - 'app/**'
+      - 'magisk/**'
+      - 'ci_build.sh'
+      - 'VER'
+      - '.github/workflows/build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read version
+        id: ver
+        run: |
+          v="$(tr -d '[:space:]' < VER)"
+          [ -n "$v" ] || { echo "VER file is empty"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "tag=v$v" >> "$GITHUB_OUTPUT"
+          echo "resolved version: v$v"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
+
+      - name: Set up NDK
+        uses: nttld/setup-ndk@v1
+        id: setup_ndk
+        with:
+          ndk-version: r26c
+          add-to-path: false
+
+      - name: Install native build tools
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build meson pkg-config \
+            libssl-dev ca-certificates curl zip unzip
+          # gradle wrapper may be absent, install gradle as fallback
+          if [ ! -x ./gradlew ]; then
+            sudo apt-get install -y --no-install-recommends gradle
+          fi
+
+      - name: Build all (libs + daemon + apk + module zip)
+        env:
+          ANDROID_NDK: ${{ steps.setup_ndk.outputs.ndk-path }}
+          ANDROID_HOME: ${{ env.ANDROID_SDK_ROOT }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT }}
+        run: |
+          echo "NDK: $ANDROID_NDK"
+          echo "SDK: $ANDROID_HOME"
+          # 兜底: setup-android 可能只设置其中一个
+          [ -z "$ANDROID_HOME" ] && ANDROID_HOME="$ANDROID_SDK_ROOT"
+          [ -z "$ANDROID_SDK_ROOT" ] && ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export ANDROID_HOME ANDROID_SDK_ROOT
+          ./ci_build.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KernelShoot-${{ steps.ver.outputs.tag }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Check existing release
+        id: rel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "release $TAG already exists, will overwrite"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "release $TAG does not exist, will create"
+          fi
+
+      - name: Overwrite existing release
+        if: steps.rel.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          ZIP="dist/KernelShoot-${TAG}.zip"
+          # 删除旧 release (保留 tag, 重新发版)
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          # 等几秒让 GitHub 后端同步
+          sleep 3
+          gh release create "$TAG" "$ZIP" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "KernelShoot $TAG" \
+            --notes "Auto-built from commit ${{ github.sha }}
+
+          Flashable module for KernelSU (SELinux Enforcing supported).
+
+          - Module zip: \`KernelShoot-${TAG}.zip\`
+          - Version: ${TAG#v}
+          - Build commit: ${{ github.sha }}
+
+          Install via KernelSU Manager → Modules → Install from storage → reboot." \
+            --latest
+
+      - name: Create new release
+        if: steps.rel.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          ZIP="dist/KernelShoot-${TAG}.zip"
+          gh release create "$TAG" "$ZIP" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "KernelShoot $TAG" \
+            --notes "Auto-built from commit ${{ github.sha }}
+
+          Flashable module for KernelSU (SELinux Enforcing supported).
+
+          - Module zip: \`KernelShoot-${TAG}.zip\`
+          - Version: ${TAG#v}
+          - Build commit: ${{ github.sha }}
+
+          Install via KernelSU Manager → Modules → Install from storage → reboot." \
+            --latest
