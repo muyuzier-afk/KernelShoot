@@ -1,0 +1,13 @@
+# Auto-detect text files, normalize line endings on commit
+* text=auto eol=lf
+
+# Shell scripts must keep LF
+*.sh         text eol=lf
+gradlew      text eol=lf
+
+# Binary files must not be touched
+*.jar        binary
+*.png        binary
+*.jpg        binary
+*.zip        binary
+*.a          binary

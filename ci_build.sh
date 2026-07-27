@@ -111,13 +111,10 @@ build_daemon() {
 build_apk() {
     log "building APK"
     cd "$ROOT"
-    # gradle wrapper 不在仓库里, 用系统 gradle 兜底
-    if [ -x "./gradlew" ]; then
-        chmod +x ./gradlew
-        ./gradlew :app:assembleRelease --no-daemon -x lint
-    else
-        gradle :app:assembleRelease --no-daemon -x lint
-    fi
+    # 强制使用项目自带的 gradle wrapper (version 与 AGP 匹配, 不依赖 runner 系统 gradle)
+    [ -x "./gradlew" ] || fail "gradlew not found in repo root"
+    chmod +x ./gradlew
+    ./gradlew :app:assembleRelease --no-daemon -x lint --no-validate-url
     local APK="$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk"
     [ -f "$APK" ] || fail "apk build failed"
     cp -f "$APK" "$WORK/KernelShoot.apk"
