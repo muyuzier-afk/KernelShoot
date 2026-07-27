@@ -43,15 +43,14 @@ public final class SocketClient {
         LocalSocket socket = null;
         try {
             socket = new LocalSocket();
-            // 注意: setSoTimeout 必须在 connect() 之后调用.
-            // new LocalSocket() 内部 fd == null, connect() 才会触发 implCreate
-            // 创建底层 socket fd. 在 connect 之前调 setSoTimeout 会命中
-            // LocalSocketImpl.checkOpen() 抛 IllegalStateException("socket not created"),
-            // 表现为 "daemon unavailable: socket not created" 误报.
+            // 注意: 必须用 connect(addr) 无参超时重载.
+            // Android 的 LocalSocketImpl.connect(addr, timeout) 在部分系统上
+            // 直接抛 UnsupportedOperationException ("not supported"), 而
+            // connect(addr) 走 connectLocal 路径, 是稳定可用实现.
+            // 读取超时仍由下方 setSoTimeout 控制.
             socket.connect(new LocalSocketAddress(
                     DaemonConst.SOCKET_NAME,
-                    LocalSocketAddress.Namespace.ABSTRACT),
-                    DaemonConst.SOCKET_TIMEOUT_MS);
+                    LocalSocketAddress.Namespace.ABSTRACT));
             socket.setSoTimeout(DaemonConst.SOCKET_TIMEOUT_MS);
 
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
