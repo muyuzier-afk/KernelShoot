@@ -104,9 +104,15 @@ else
 fi
 
 # ---------- 看门循环: 启动并保活守护进程 ----------
+# 关键: 用 -f (前台模式) 启动, 跳过 daemon 内部的双重 fork+setsid.
+# 原因: service.sh 自身已在 KSU late_start service 阶段独立运行 (已脱离
+# 控制终端), 不需要再守护进程化. 若让 daemon 自己 fork, 第一次 fork 的
+# 父进程会立即 _exit(0), watchdog 的 wait 会误以为 daemon 已退出, 导致
+# 每 2 秒空转重启一次. 前台模式下 daemon 不 fork, wait 能正确阻塞到
+# 真正的退出事件.
 while true; do
     if [ -x "$BIN" ]; then
-        "$BIN" >> "$LOG" 2>&1 &
+        "$BIN" -f >> "$LOG" 2>&1 &
         KS_PID=$!
         wait $KS_PID
         RC=$?
