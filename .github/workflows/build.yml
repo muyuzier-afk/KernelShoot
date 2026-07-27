@@ -58,10 +58,6 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build meson pkg-config \
             libssl-dev ca-certificates curl zip unzip
-          # gradle wrapper may be absent, install gradle as fallback
-          if [ ! -x ./gradlew ]; then
-            sudo apt-get install -y --no-install-recommends gradle
-          fi
 
       - name: Build all (libs + daemon + apk + module zip)
         env:
