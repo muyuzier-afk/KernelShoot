@@ -64,7 +64,40 @@ step_apk() {
         err "APK 构建失败: $APK_RELEASE 不存在"
         exit 1
     fi
-    log "APK: $APK_RELEASE"
+    log "APK (未签名): $APK_RELEASE"
+}
+
+step_sign() {
+    # 给 -unsigned.apk 走 zipalign + apksigner, 产出 -signed.apk
+    # 否则 customize.sh 中 pm install 会报 INSTALL_PARSE_FAILED_NO_CERTIFICATES
+    log "签名 APK"
+    : "${ANDROID_HOME:?请设置 ANDROID_HOME}"
+    local BTDIR
+    BTDIR="$(ls -d "$ANDROID_HOME"/build-tools/* 2>/dev/null | sort -V | tail -1)"
+    [ -n "$BTDIR" ] || { err "未找到 build-tools"; exit 1; }
+    local APKSIGNER="$BTDIR/apksigner"
+    local ZIPALIGN="$BTDIR/zipalign"
+    [ -x "$APKSIGNER" ] || { err "缺少 apksigner: $APKSIGNER"; exit 1; }
+    [ -x "$ZIPALIGN"  ] || { err "缺少 zipalign: $ZIPALIGN";   exit 1; }
+
+    local UNSIGNED="$APP/build/outputs/apk/release/app-release-unsigned.apk"
+    local ALIGNED="$APP/build/outputs/apk/release/app-release-aligned.apk"
+    local SIGNED="$APP/build/outputs/apk/release/app-release-signed.apk"
+    local KEYSTORE="$NATIVE/prebuilt/$ABI/keystore.jks"
+    if [ ! -f "$KEYSTORE" ]; then
+        keytool -genkeypair -keystore "$KEYSTORE" -alias kernelshoot \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass changeit -keypass changeit \
+            -dname "CN=KernelShoot, OU=Magisk, O=KernelShoot, L=NA, ST=NA, C=CN" \
+            >/dev/null 2>&1
+    fi
+    "$ZIPALIGN"  -f -p 4 "$UNSIGNED" "$ALIGNED"
+    "$APKSIGNER" sign --ks "$KEYSTORE" --ks-pass pass:changeit --key-pass pass:changeit \
+        --min-sdk-version 26 \
+        --out "$SIGNED" "$ALIGNED"
+    "$APKSIGNER" verify --print-certs "$SIGNED" >/dev/null
+    APK_RELEASE="$SIGNED"
+    log "APK (已签名): $APK_RELEASE"
 }
 
 step_module() {
@@ -104,16 +137,18 @@ step_module() {
 case "${1:-all}" in
     libs)   step_libs ;;
     daemon) step_daemon ;;
-    apk)    step_apk ;;
+    apk)    step_apk; step_sign ;;
+    sign)   step_sign ;;
     module) step_module ;;
     all)
         step_libs
         step_daemon
         step_apk
+        step_sign
         step_module
         ;;
     *)
-        echo "用法: $0 {all|libs|daemon|apk|module}"
+        echo "用法: $0 {all|libs|daemon|apk|sign|module}"
         exit 1
         ;;
 esac
