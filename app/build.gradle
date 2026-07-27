@@ -28,6 +28,23 @@ android {
     }
 }
 
+// 修复 kotlin-stdlib-jdk7/jdk8:1.6.21 与 kotlin-stdlib:1.8.22 重复类冲突
+// 1.8+ 的 kotlin-stdlib 已合并 jdk7/jdk8 扩展, 不再需要单独的 jdk7/jdk8 artifact
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == 'org.jetbrains.kotlin' &&
+            (details.requested.name == 'kotlin-stdlib-jdk7' ||
+             details.requested.name == 'kotlin-stdlib-jdk8')) {
+            details.useTarget(
+                group: 'org.jetbrains.kotlin',
+                name: 'kotlin-stdlib',
+                version: '1.8.22'
+            )
+            details.because('Avoid duplicate classes with merged kotlin-stdlib 1.8+')
+        }
+    }
+}
+
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.7.0'
     implementation 'androidx.core:core:1.13.1'
