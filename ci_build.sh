@@ -125,8 +125,11 @@ build_module() {
     log "assembling module zip"
     local VER; VER="$(tr -d '[:space:]' < "$ROOT/VER")"
     [ -n "$VER" ] || fail "VER file empty"
-    local STAGE; STAGE="$(mktemp -d)"
-    trap 'rm -rf "$STAGE"' EXIT
+    # 必须用全局变量: 函数返回后 local 失效, 但 trap 仍会触发,
+    # 此时若 $STAGE 不可见, 在 set -u 下直接报 unbound variable 退出非 0
+    STAGE="$(mktemp -d)"
+    # ${STAGE:-} 防御 trap 触发时变量已 unset 的情况
+    trap 'rm -rf "${STAGE:-}"' EXIT
 
     cp -r "$ROOT/magisk/." "$STAGE/"
     # 同步 VER 到 module.prop version
@@ -144,6 +147,11 @@ build_module() {
     ( cd "$STAGE" && zip -r9 "$ZIP" ./* >/dev/null )
     log "module zip: $ZIP"
     ls -la "$ZIP"
+
+    # 显式清理并解除 trap, 避免正常路径下也走 trap 二次清理
+    rm -rf "$STAGE"
+    trap - EXIT
+    STAGE=
 }
 
 # ---------- main ----------
