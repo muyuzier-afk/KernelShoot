@@ -70,8 +70,11 @@ public final class SocketClient {
             String json = new String(resp, StandardCharsets.UTF_8);
             return parseResponse(json);
         } catch (Exception e) {
-            Log.e(TAG, "requestScreenshot failed: " + e);
-            return new Result(-1, "daemon unavailable: " + e.getMessage(), null);
+            // e.getMessage() 可能为 null (如某些 ErrnoException 包装), 拼上类名便于排查
+            String detail = e.getClass().getSimpleName();
+            if (e.getMessage() != null) detail += ": " + e.getMessage();
+            Log.e(TAG, "requestScreenshot failed: " + e, e);
+            return new Result(-1, "daemon unavailable: " + detail, null);
         } finally {
             if (socket != null) {
                 try { socket.close(); } catch (Exception ignored) {}
