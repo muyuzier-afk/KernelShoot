@@ -7,6 +7,8 @@
 Read frames directly from the kernel framebuffer — bypass SurfaceFlinger entirely.  
 Zero foreground interference. No window, no focus steal, no touch interception.
 
+**English** · [简体中文](./README.zh-CN.md)
+
 [![Build and Release](https://github.com/muyuzier-afk/KernelShoot/actions/workflows/build.yml/badge.svg?branch=main)](https://github.com/muyuzier-afk/KernelShoot/actions/workflows/build.yml)
 [![Release](https://img.shields.io/github/v/release/muyuzier-afk/KernelShoot?label=Release&color=blue)](https://github.com/muyuzier-afk/KernelShoot/releases)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
@@ -120,7 +122,8 @@ A screenshot is triggered by tapping a low-priority persistent notification. The
 ├── .github/workflows/build.yml  # Build + Release (same-tag overwrite)
 ├── .gitattributes
 ├── settings.gradle / build.gradle / gradle.properties
-└── README.md
+├── README.md                    # English documentation
+└── README.zh-CN.md              # Simplified Chinese documentation
 ```
 
 ## Installation
@@ -259,6 +262,8 @@ reboot
 Released under the [MIT License](./LICENSE).
 
 <div align="center">
+
+[English](./README.md) · [简体中文](./README.zh-CN.md)
 
 <sub>Built with Android NDK · libjpeg-turbo · libdrm · Gradle 8.7 · AGP 8.5.0</sub>
 

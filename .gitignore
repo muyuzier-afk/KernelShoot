@@ -9,6 +9,9 @@
 # Local CI cache
 /build/_ci/
 
+# Local config
+/local.properties
+
 # IDE
 /.idea/
 *.iml
