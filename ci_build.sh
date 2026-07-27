@@ -117,7 +117,50 @@ build_apk() {
     ./gradlew :app:assembleRelease --no-daemon -x lint
     local APK="$ROOT/app/build/outputs/apk/release/app-release-unsigned.apk"
     [ -f "$APK" ] || fail "apk build failed"
-    cp -f "$APK" "$WORK/KernelShoot.apk"
+    cp -f "$APK" "$WORK/KernelShoot-unsigned.apk"
+}
+
+# ---------- 4.5 给 APK 签名 ----------
+# assembleRelease 默认产出的是 -unsigned.apk, 直接 pm install 会
+# 报 INSTALL_PARSE_FAILED_NO_CERTIFICATES. 用本地生成的自签 keystore
+# 走 zipalign + apksigner 签名一次.
+sign_apk() {
+    log "signing APK"
+    local UNSIGNED="$WORK/KernelShoot-unsigned.apk"
+    local ALIGNED="$WORK/KernelShoot-aligned.apk"
+    local SIGNED="$WORK/KernelShoot.apk"
+    local KEYSTORE="$WORK/keystore.jks"
+    # 选最新 build-tools, 避免硬编码版本
+    local BTDIR
+    BTDIR="$(ls -d "$SDK"/build-tools/* 2>/dev/null | sort -V | tail -1)"
+    [ -n "$BTDIR" ] || fail "no build-tools found under $SDK/build-tools"
+    local APKSIGNER="$BTDIR/apksigner"
+    local ZIPALIGN="$BTDIR/zipalign"
+    [ -x "$APKSIGNER" ] || fail "apksigner not found: $APKSIGNER"
+    [ -x "$ZIPALIGN" ]  || fail "zipalign not found: $ZIPALIGN"
+
+    # 首次构建生成 keystore, 后续复用 (确保模块可重复发布, 签名一致)
+    if [ ! -f "$KEYSTORE" ]; then
+        keytool -genkeypair -v -keystore "$KEYSTORE" -alias kernelshoot \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -storepass changeit -keypass changeit \
+            -dname "CN=KernelShoot, OU=Magisk, O=KernelShoot, L=NA, ST=NA, C=CN" \
+            >/dev/null 2>&1 \
+            || fail "keytool genkeypair failed"
+    fi
+
+    "$ZIPALIGN"  -f -p 4 "$UNSIGNED" "$ALIGNED"
+    "$APKSIGNER" sign \
+        --ks "$KEYSTORE" \
+        --ks-pass pass:changeit \
+        --key-pass pass:changeit \
+        --min-sdk-version 26 \
+        --out "$SIGNED" "$ALIGNED" \
+        || fail "apksigner sign failed"
+    "$APKSIGNER" verify --print-certs "$SIGNED" >/dev/null \
+        || fail "apksigner verify failed"
+    rm -f "$UNSIGNED" "$ALIGNED"
+    log "signed APK: $SIGNED"
 }
 
 # ---------- 5. 组装模块 zip ----------
@@ -159,6 +202,7 @@ build_libjpeg
 build_libdrm
 build_daemon
 build_apk
+sign_apk
 build_module
 
 log "done. dist:"
