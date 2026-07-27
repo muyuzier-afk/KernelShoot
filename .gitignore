@@ -1,0 +1,20 @@
+# Build outputs
+/dist/
+/native/build/
+/native/prebuilt/
+/app/build/
+/.gradle/
+/build/
+
+# Local CI cache
+/build/_ci/
+
+# IDE
+/.idea/
+*.iml
+.local/
+.cxx/
+
+# OS
+.DS_Store
+Thumbs.db
