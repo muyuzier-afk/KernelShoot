@@ -43,10 +43,16 @@ public final class SocketClient {
         LocalSocket socket = null;
         try {
             socket = new LocalSocket();
-            socket.setSoTimeout(DaemonConst.SOCKET_TIMEOUT_MS);
+            // 注意: setSoTimeout 必须在 connect() 之后调用.
+            // new LocalSocket() 内部 fd == null, connect() 才会触发 implCreate
+            // 创建底层 socket fd. 在 connect 之前调 setSoTimeout 会命中
+            // LocalSocketImpl.checkOpen() 抛 IllegalStateException("socket not created"),
+            // 表现为 "daemon unavailable: socket not created" 误报.
             socket.connect(new LocalSocketAddress(
                     DaemonConst.SOCKET_NAME,
-                    LocalSocketAddress.Namespace.ABSTRACT));
+                    LocalSocketAddress.Namespace.ABSTRACT),
+                    DaemonConst.SOCKET_TIMEOUT_MS);
+            socket.setSoTimeout(DaemonConst.SOCKET_TIMEOUT_MS);
 
             DataOutputStream out = new DataOutputStream(socket.getOutputStream());
             byte[] req = DaemonConst.REQ_SCREENSHOT.getBytes(StandardCharsets.UTF_8);
