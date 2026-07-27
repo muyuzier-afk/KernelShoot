@@ -138,6 +138,12 @@ int main(int argc, char **argv) {
 
     KS_LOGI("KernelShoot daemon starting (foreground=%d)", foreground);
 
+    /* 打印 SELinux 状态, 便于日志排查 (两种模式都支持, 仅记录) */
+    int se = ks_selinux_enforcing();
+    if (se == 1)      KS_LOGI("SELinux: Enforcing (rules required)");
+    else if (se == 0) KS_LOGI("SELinux: Permissive (no rules needed)");
+    else              KS_LOGI("SELinux: not available");
+
     if (!foreground) {
         if (ks_daemonize() < 0) {
             KS_LOGE("daemonize failed, exit");
@@ -148,9 +154,12 @@ int main(int argc, char **argv) {
     int listen_fd = ks_server_create();
     if (listen_fd < 0) {
         KS_LOGE("server create failed, exit");
+        /* 打印基于当前 SELinux 模式的诊断建议 */
+        ks_selinux_dump_diag();
         return 1;
     }
 
+    KS_LOGI("daemon ready, entering epoll loop");
     /* 进入事件循环: 非截图期间 epoll_wait 阻塞, CPU 0% */
     ks_server_loop(listen_fd, handle_request);
 

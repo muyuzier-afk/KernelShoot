@@ -50,4 +50,12 @@ int ks_write_jpeg(const char *dir, const char *pkg,
                   const uint8_t *jpg, size_t len,
                   char *path_out, size_t path_len);
 
+/* ---- selinux_check.c ---- */
+/* 读取 /sys/fs/selinux/enforce 返回 SELinux 状态
+ * 返回值: 1 = Enforcing, 0 = Permissive, -1 = SELinux 未启用或读失败 */
+int ks_selinux_enforcing(void);
+
+/* 打印当前 SELinux 状态与诊断建议 (用于 server bind 失败场景) */
+void ks_selinux_dump_diag(void);
+
 #endif /* KERNELSHOOT_INTERNAL_H */
