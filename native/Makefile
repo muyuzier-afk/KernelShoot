@@ -22,8 +22,16 @@ ARCH          := arm64
 ABI           := arm64-v8a
 HOST_TAG      := linux-x86_64
 
+# NDK 标准布局: $NDK/toolchains/llvm/prebuilt/<host>/
+# 部分老版 NDK 没有 prebuilt 层, 兼容两种布局
+TOOLCHAIN     := $(NDK)/toolchains/llvm/prebuilt/$(HOST_TAG)
+ifeq ($(wildcard $(TOOLCHAIN)/.),)
 TOOLCHAIN     := $(NDK)/toolchains/llvm/$(HOST_TAG)
-SYSROOT       := $(TOOLCHAIN)/sysroot
+endif
+SYSROOT       := $(NDK)/toolchains/llvm/prebuilt/$(HOST_TAG)/sysroot
+ifeq ($(wildcard $(SYSROOT)/.),)
+SYSROOT       := $(NDK)/toolchains/llvm/$(HOST_TAG)/sysroot
+endif
 
 CC            := $(TOOLCHAIN)/bin/aarch64-linux-android$(API)-clang
 STRIP         := $(TOOLCHAIN)/bin/llvm-strip

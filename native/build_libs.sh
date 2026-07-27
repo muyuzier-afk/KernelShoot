@@ -20,7 +20,10 @@ ABI=arm64-v8a
 API=28
 ARCH=arm64
 HOST_TAG=linux-x86_64
-TOOLCHAIN="$NDK/toolchains/llvm/$HOST_TAG"
+# NDK 标准布局: $NDK/toolchains/llvm/prebuilt/<host>/
+# 部分老版 NDK 没有 prebuilt 层, 兼容两种布局
+TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/$HOST_TAG"
+[ -d "$TOOLCHAIN" ] || TOOLCHAIN="$NDK/toolchains/llvm/$HOST_TAG"
 SYSROOT="$TOOLCHAIN/sysroot"
 CC="$TOOLCHAIN/bin/aarch64-linux-android$API-clang"
 AR="$TOOLCHAIN/bin/llvm-ar"

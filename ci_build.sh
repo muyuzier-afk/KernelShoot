@@ -22,11 +22,14 @@ log()  { echo -e "\033[1;34m[ci]\033[0m $*"; }
 fail() { echo -e "\033[1;31m[ci-error]\033[0m $*" >&2; exit 1; }
 
 # ---------- 0. 工具链准备 ----------
-TOOLCHAIN="$NDK/toolchains/llvm/linux-x86_64"
+# NDK 标准布局: $NDK/toolchains/llvm/prebuilt/<host>/bin/
+# host 在 Linux 上是 linux-x86_64
+TOOLCHAIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64"
+[ -d "$TOOLCHAIN" ] || TOOLCHAIN="$NDK/toolchains/llvm/linux-x86_64"
 export PATH="$TOOLCHAIN/bin:$PATH"
 CC="$TOOLCHAIN/bin/aarch64-linux-android$API-clang"
 AR="$TOOLCHAIN/bin/llvm-ar"
-[ -x "$CC" ] || fail "clang not found: $CC"
+[ -x "$CC" ] || fail "clang not found: $CC (searched $TOOLCHAIN/bin)"
 
 PREBUILT="$ROOT/native/prebuilt/$ABI"
 WORK="$ROOT/build/_ci"
