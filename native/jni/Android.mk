@@ -48,7 +48,8 @@ LOCAL_SRC_FILES         := \
     fb_screenshot.c \
     drm_screenshot.c \
     jpeg_encoder.c \
-    file_writer.c
+    file_writer.c \
+    selinux_check.c
 
 LOCAL_CFLAGS            := -Wall -Wextra -O2 -fPIE -DANDROID
 LOCAL_LDFLAGS           := -fPIE -pie -Wl,--gc-sections

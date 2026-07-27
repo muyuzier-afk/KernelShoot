@@ -44,6 +44,7 @@ LDFLAGS       := -fPIE -pie -Wl,--gc-sections \
 LDLIBS        := -lturbojpeg -ldrm -llog
 
 SRCS          := $(wildcard $(SRC_DIR)/*.c)
+# selinux_check.c 已被 wildcard 自动包含
 OBJS          := $(patsubst $(SRC_DIR)/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 
 .PHONY: all strip clean
