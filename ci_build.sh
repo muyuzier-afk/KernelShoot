@@ -82,10 +82,13 @@ EOF
         --cross-file "$WORK/libdrm-cross.txt" \
         --default-library=static \
         --prefix="$PREBUILT" \
+        -Dauto_features=disabled \
         -Dintel=disabled -Dradeon=disabled -Damdgpu=disabled \
         -Dnouveau=disabled -Dvmwgfx=disabled -Domap=disabled \
         -Dexynos=disabled -Dfreedreno=disabled -Dtegra=disabled \
-        -Dvc4=disabled -Detnaviv=disabled -Dsysmans=disabled
+        -Dvc4=disabled -Detnaviv=disabled \
+        -Dcairo-tests=disabled -Dman-pages=disabled \
+        -Dvalgrind=disabled -Dtests=false
     ninja -C "$WORK/libdrm" install
     cp -f "$PREBUILT/lib/libdrm.a" "$PREBUILT/" 2>/dev/null || true
     cp -f "$PREBUILT"/include/xf86drm*.h "$PREBUILT/include/" 2>/dev/null || true
