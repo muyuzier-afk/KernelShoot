@@ -8,7 +8,15 @@ on:
       - 'app/**'
       - 'magisk/**'
       - 'ci_build.sh'
+      - 'build.sh'
       - 'VER'
+      - 'gradlew'
+      - 'gradle/**'
+      - 'settings.gradle'
+      - 'build.gradle'
+      - 'gradle.properties'
+      - '.gitattributes'
+      - '.gitignore'
       - '.github/workflows/build.yml'
   workflow_dispatch:
 
