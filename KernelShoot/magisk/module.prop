@@ -1,0 +1,6 @@
+id=kernelshoot
+name=KernelShoot - 纯ROOT无损截图
+version=v1.0.0
+versionCode=1
+author=KernelShoot
+description=从内核 framebuffer 直接读画面的纯 ROOT 截图服务。守护进程常驻 (PID=1 收养)，不创建窗口、不抢焦点、不拦截触摸。点击持久通知 3 秒倒计时后静默截图，保存为 JPEG 到 /sdcard/DCIM/。
